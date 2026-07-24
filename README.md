@@ -96,6 +96,12 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
+## ⚠️ Disclaimer & Usage Note
+
+> **Note:** This project utilizes Telegram's Bot API infrastructure as an underlying storage backend. It is developed **strictly for educational, testing, and portfolio/showcase purposes**. It is not intended for commercial production or storing sensitive/critical personal data. Please use responsibly.
+
+---
+
 ## 📄 License
 
 Distributed under the MIT License. See `LICENSE` for more information.
