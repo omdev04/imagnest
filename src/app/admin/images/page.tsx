@@ -25,7 +25,7 @@ export default function AdminImagesPage() {
     const [totalCount, setTotalCount] = useState(0);
     const isFetching = useRef(false);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
-    const sentinelRef = useRef<HTMLDivElement>(null);
+    const sentinelRef = useRef<HTMLTableDataCellElement>(null);
     const { showToast } = useToast();
 
     const fetchImages = useCallback(async (pageNum: number, append: boolean) => {
