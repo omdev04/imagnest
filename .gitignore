@@ -40,3 +40,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Cache
+cache/
+
+# Cloudflare & Wrangler
+.wrangler/
+.open-next/
+
+# IDEs and Tools
+.qodo/
+.opencode/

@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, Trash2, ExternalLink, Eye } from 'lucide-react';
+import { ExternalLink, Trash2 } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
 
 interface Image {
@@ -19,91 +19,80 @@ interface Image {
 
 export default function AdminImagesPage() {
     const [images, setImages] = useState<Image[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [page, setPage] = useState(1); // current page for page-based navigation
-    const [loadedPages, setLoadedPages] = useState(1); // highest page loaded when lazy-loading
+    const [loading, setLoading] = useState(false);
+    const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [totalCount, setTotalCount] = useState(0);
+    const isFetching = useRef(false);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const sentinelRef = useRef<HTMLDivElement>(null);
     const { showToast } = useToast();
 
-    useEffect(() => {
-        // replace results when navigating pages directly
-        fetchImages({ page, append: false });
-    }, [page]);
-
-    const fetchImages = async ({ page, append = false }: { page: number; append?: boolean }) => {
+    const fetchImages = useCallback(async (pageNum: number, append: boolean) => {
+        if (isFetching.current) return;
+        isFetching.current = true;
+        setLoading(true);
         try {
-            setLoading(true);
-            const params = new URLSearchParams({
-                page: page.toString(),
-                limit: '10'
-            });
+            const params = new URLSearchParams({ page: pageNum.toString(), limit: '20' });
             const res = await fetch(`/api/admin/images?${params}`);
             const data = await res.json();
             if (data.images) {
-                if (append) {
-                    setImages((prev) => [...prev, ...data.images]);
-                } else {
-                    setImages(data.images);
-                }
-                if (data.pagination) {
-                    setTotalPages(data.pagination.pages || 1);
-                    setTotalCount(data.pagination.total || 0);
-                    setLoadedPages(page);
-                }
+                setImages(prev => append ? [...prev, ...data.images] : data.images);
+                setTotalPages(data.pagination?.pages ?? 1);
+                setTotalCount(data.pagination?.total ?? 0);
+                setPage(pageNum);
             }
-        } catch (error) {
-            console.error(error);
+        } catch {
             showToast('Failed to fetch images', 'error');
         } finally {
             setLoading(false);
+            isFetching.current = false;
         }
-    };
+    }, [showToast]);
+
+    // Initial load
+    useEffect(() => {
+        fetchImages(1, false);
+    }, [fetchImages]);
+
+    // Infinite scroll — observe sentinel inside the scroll container
+    useEffect(() => {
+        const sentinel = sentinelRef.current;
+        const container = scrollContainerRef.current;
+        if (!sentinel || !container) return;
+
+        const obs = new IntersectionObserver(
+            ([entry]) => {
+                if (entry.isIntersecting && !isFetching.current) {
+                    setPage(current => {
+                        if (current < totalPages) {
+                            fetchImages(current + 1, true);
+                        }
+                        return current;
+                    });
+                }
+            },
+            { root: container, rootMargin: '200px', threshold: 0 }
+        );
+        obs.observe(sentinel);
+        return () => obs.disconnect();
+    }, [totalPages, fetchImages]);
 
     const handleDelete = async (imageId: string) => {
         if (!confirm('Are you sure you want to delete this image?')) return;
-
         try {
-            const res = await fetch(`/api/admin/images?imageId=${imageId}`, {
-                method: 'DELETE'
-            });
-
+            const res = await fetch(`/api/admin/images?imageId=${imageId}`, { method: 'DELETE' });
             if (res.ok) {
                 showToast('Image deleted successfully', 'success');
-                fetchImages({ page, append: false });
+                setImages(prev => prev.filter(img => img._id !== imageId));
+                setTotalCount(c => c - 1);
             } else {
                 showToast('Failed to delete image', 'error');
             }
-        } catch (error) {
+        } catch {
             showToast('Failed to delete image', 'error');
         }
     };
-
-    // Lazy-load: load next page and append
-    const loadMore = async () => {
-        if (loading) return;
-        const nextPage = loadedPages + 1;
-        if (nextPage > totalPages) return;
-        await fetchImages({ page: nextPage, append: true });
-    };
-
-    // IntersectionObserver to auto load more when sentinel appears
-    const sentinelRef = useRef<HTMLDivElement | null>(null);
-
-    const onIntersect = useCallback((entries: IntersectionObserverEntry[]) => {
-        const [entry] = entries;
-        if (entry.isIntersecting && !loading && loadedPages < totalPages) {
-            loadMore();
-        }
-    }, [loading, loadedPages, totalPages]);
-
-    useEffect(() => {
-        const el = sentinelRef.current;
-        if (!el) return;
-        const obs = new IntersectionObserver(onIntersect, { root: null, rootMargin: '200px', threshold: 0.1 });
-        obs.observe(el);
-        return () => obs.disconnect();
-    }, [onIntersect]);
 
     const formatSize = (bytes: number) => {
         if (bytes === 0) return '0 B';
@@ -114,14 +103,20 @@ export default function AdminImagesPage() {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4">
             <div className="flex justify-between items-center">
                 <h1 className="text-2xl font-bold text-white">Images</h1>
+                <span className="text-sm text-gray-400">{totalCount} total</span>
             </div>
 
-            <div className="bg-[#0A0E1A] border border-white/5 rounded-lg overflow-hidden">
+            {/* Scrollable table container — used as IntersectionObserver root */}
+            <div
+                ref={scrollContainerRef}
+                className="bg-[#0A0E1A] border border-white/5 rounded-lg overflow-y-auto"
+                style={{ maxHeight: 'calc(100vh - 180px)' }}
+            >
                 <table className="w-full text-left text-sm text-gray-400">
-                    <thead className="bg-white/5 text-gray-200">
+                    <thead className="bg-white/5 text-gray-200 sticky top-0 z-10">
                         <tr>
                             <th className="p-4">Preview</th>
                             <th className="p-4">Name</th>
@@ -133,9 +128,7 @@ export default function AdminImagesPage() {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
-                        {loading ? (
-                            <tr><td colSpan={7} className="p-8 text-center">Loading...</td></tr>
-                        ) : images.length === 0 ? (
+                        {images.length === 0 && !loading ? (
                             <tr><td colSpan={7} className="p-8 text-center">No images found</td></tr>
                         ) : (
                             images.map((image) => (
@@ -145,12 +138,15 @@ export default function AdminImagesPage() {
                                             <img
                                                 src={`/api/cdn/${image._id}?size=small`}
                                                 alt="Preview"
+                                                loading="lazy"
                                                 className="h-full w-full object-cover"
                                                 onError={(e) => {
-                                                    // @ts-ignore
-                                                    e.target.style.display = 'none';
-                                                    // @ts-ignore
-                                                    e.target.parentNode.innerHTML = '<div class="h-full w-full flex items-center justify-center text-xs text-gray-600">IMG</div>';
+                                                    const el = e.currentTarget;
+                                                    el.style.display = 'none';
+                                                    const placeholder = document.createElement('div');
+                                                    placeholder.className = 'h-full w-full flex items-center justify-center text-xs text-gray-600';
+                                                    placeholder.textContent = 'IMG';
+                                                    el.parentElement?.appendChild(placeholder);
                                                 }}
                                             />
                                         </div>
@@ -174,10 +170,11 @@ export default function AdminImagesPage() {
                                     <td className="p-4">{formatSize(image.size)}</td>
                                     <td className="p-4">{image.views}</td>
                                     <td className="p-4">
-                                        <span className={`px-2 py-1 rounded-full text-xs ${image.moderationStatus === 'approved' ? 'bg-green-500/10 text-green-400' :
-                                            image.moderationStatus === 'removed' ? 'bg-red-500/10 text-red-400' :
-                                                'bg-gray-500/10 text-gray-400'
-                                            }`}>
+                                        <span className={`px-2 py-1 rounded-full text-xs ${
+                                            image.moderationStatus === 'approved' ? 'bg-green-500/10 text-green-400' :
+                                            image.moderationStatus === 'removed'  ? 'bg-red-500/10 text-red-400' :
+                                            'bg-gray-500/10 text-gray-400'
+                                        }`}>
                                             {image.moderationStatus || 'active'}
                                         </span>
                                     </td>
@@ -203,48 +200,26 @@ export default function AdminImagesPage() {
                                 </tr>
                             ))
                         )}
+
+                        {/* Sentinel row — triggers next page load when scrolled into view */}
+                        {page < totalPages && (
+                            <tr>
+                                <td colSpan={7} ref={sentinelRef} className="p-4 text-center text-gray-500 text-xs">
+                                    {loading ? 'Loading more...' : ''}
+                                </td>
+                            </tr>
+                        )}
                     </tbody>
                 </table>
+
+                {loading && images.length > 0 && (
+                    <div className="py-4 text-center text-sm text-gray-500">Loading...</div>
+                )}
             </div>
 
-            <div className="flex flex-col gap-2">
-                <div className="flex justify-between items-center text-sm text-gray-400">
-                    <div className="flex items-center gap-4">
-                        <button
-                            disabled={page === 1}
-                            onClick={() => setPage(p => Math.max(1, p - 1))}
-                            className="disabled:opacity-50 hover:text-white"
-                        >
-                            Previous
-                        </button>
-
-                        <span>Page {page} of {totalPages}</span>
-
-                        <button
-                            disabled={page >= totalPages}
-                            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                            className="disabled:opacity-50 hover:text-white"
-                        >
-                            Next
-                        </button>
-                    </div>
-
-                    <div className="flex items-center gap-4">
-                        <span className="text-xs text-gray-500">Showing 10 per page{totalCount ? ` • ${totalCount} total` : ''}</span>
-                        <button
-                            onClick={loadMore}
-                            disabled={loadedPages >= totalPages || loading}
-                            className="px-3 py-1 bg-white/5 rounded hover:bg-white/10 disabled:opacity-50"
-                        >
-                            Load more
-                        </button>
-                        <span className="text-xs text-gray-500">Loaded pages: {loadedPages}</span>
-                    </div>
-                </div>
-
-                {/* Sentinel element for infinite scroll (auto load more) */}
-                <div ref={sentinelRef} className="h-6 w-full" />
+            <div className="text-xs text-gray-500 text-right">
+                Showing {images.length} of {totalCount} &nbsp;·&nbsp; Page {page} of {totalPages}
             </div>
-        </div >
+        </div>
     );
 }

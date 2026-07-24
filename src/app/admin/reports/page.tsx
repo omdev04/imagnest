@@ -17,70 +17,79 @@ interface Report {
 
 export default function AdminReportsPage() {
     const [reports, setReports] = useState<Report[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [page, setPage] = useState(1); // for page-based navigation
-    const [loadedPages, setLoadedPages] = useState(1); // highest page loaded when lazy-loading
+    const [loading, setLoading] = useState(false);
+    const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [totalCount, setTotalCount] = useState(0);
     const [resolveModal, setResolveModal] = useState<{ open: boolean; reportId: string | null }>({ open: false, reportId: null });
+    const isFetching = useRef(false);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const sentinelRef = useRef<HTMLTableRowElement>(null);
     const { showToast } = useToast();
 
-    useEffect(() => {
-        // fetch the selected page (replace results)
-        fetchReports({ page, append: false });
-    }, [page]);
-
-    const fetchReports = async ({ page, append = false }: { page: number; append?: boolean }) => {
+    const fetchReports = useCallback(async (pageNum: number, append: boolean) => {
+        if (isFetching.current) return;
+        isFetching.current = true;
+        setLoading(true);
         try {
-            setLoading(true);
-            const params = new URLSearchParams({
-                page: page.toString(),
-                limit: '10',
-                status: 'pending'
-            });
+            const params = new URLSearchParams({ page: pageNum.toString(), limit: '20', status: 'pending' });
             const res = await fetch(`/api/admin/reports?${params}`);
             const data = await res.json();
             if (data.reports) {
-                if (append) {
-                    setReports((prev) => [...prev, ...data.reports]);
-                } else {
-                    setReports(data.reports);
-                }
-
-                if (data.pagination) {
-                    setTotalPages(data.pagination.pages || 1);
-                    setTotalCount(data.pagination.total || 0);
-                    setLoadedPages(page);
-                }
+                setReports(prev => append ? [...prev, ...data.reports] : data.reports);
+                setTotalPages(data.pagination?.pages ?? 1);
+                setTotalCount(data.pagination?.total ?? 0);
+                setPage(pageNum);
             }
         } catch (error) {
             console.error(error);
             showToast('Failed to fetch reports', 'error');
         } finally {
             setLoading(false);
+            isFetching.current = false;
         }
-    };
+    }, [showToast]);
+
+    useEffect(() => {
+        fetchReports(1, false);
+    }, [fetchReports]);
+
+    // Infinite scroll — use scrollContainerRef as root (admin layout scrolls inside a div)
+    useEffect(() => {
+        const sentinel = sentinelRef.current;
+        const container = scrollContainerRef.current;
+        if (!sentinel || !container) return;
+        const obs = new IntersectionObserver(
+            ([entry]) => {
+                if (entry.isIntersecting && !isFetching.current) {
+                    setPage(current => {
+                        if (current < totalPages) fetchReports(current + 1, true);
+                        return current;
+                    });
+                }
+            },
+            { root: container, rootMargin: '200px', threshold: 0 }
+        );
+        obs.observe(sentinel);
+        return () => obs.disconnect();
+    }, [totalPages, fetchReports]);
 
     const handleResolve = async (reportId: string, userAction: 'none' | 'warn' | 'suspend' | 'ban') => {
         try {
             const res = await fetch('/api/admin/reports', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    reportId,
-                    action: 'approve',
-                    userAction
-                })
+                body: JSON.stringify({ reportId, action: 'approve', userAction })
             });
-
             if (res.ok) {
-                showToast(`Report resolved successfully`, 'success');
+                showToast('Report resolved successfully', 'success');
                 setResolveModal({ open: false, reportId: null });
-                fetchReports({ page, append: false });
+                setReports(prev => prev.filter(r => r._id !== reportId));
+                setTotalCount(c => c - 1);
             } else {
                 showToast('Failed to resolve report', 'error');
             }
-        } catch (error) {
+        } catch {
             showToast('Action failed', 'error');
         }
     };
@@ -88,56 +97,37 @@ export default function AdminReportsPage() {
     const handleIgnore = async (reportId: string) => {
         try {
             const res = await fetch('/api/admin/reports', {
-                method: 'POST', // Changed to POST to match API
+                method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    reportId,
-                    action: 'ignore'
-                })
+                body: JSON.stringify({ reportId, action: 'ignore' })
             });
-
             if (res.ok) {
-                showToast(`Report dismissed`, 'success');
-                fetchReports({ page, append: false });
+                showToast('Report dismissed', 'success');
+                setReports(prev => prev.filter(r => r._id !== reportId));
+                setTotalCount(c => c - 1);
             }
-        } catch (error) {
+        } catch {
             showToast('Action failed', 'error');
         }
     };
 
-    // Lazy-load: load next page and append
-    const loadMore = async () => {
-        if (loading) return;
-        const nextPage = loadedPages + 1;
-        if (nextPage > totalPages) return;
-        await fetchReports({ page: nextPage, append: true });
-    };
-
-    // Sentinel & IntersectionObserver for auto-loading more
-    const sentinelRef = useRef<HTMLDivElement | null>(null);
-
-    const onIntersect = useCallback((entries: IntersectionObserverEntry[]) => {
-        const [entry] = entries;
-        if (entry.isIntersecting && !loading && loadedPages < totalPages) {
-            loadMore();
-        }
-    }, [loading, loadedPages, totalPages]);
-
-    useEffect(() => {
-        const el = sentinelRef.current;
-        if (!el) return;
-        const obs = new IntersectionObserver(onIntersect, { root: null, rootMargin: '200px', threshold: 0.1 });
-        obs.observe(el);
-        return () => obs.disconnect();
-    }, [onIntersect]);
-
     return (
-        <div className="space-y-6">
-            <h1 className="text-2xl font-bold text-white">Abuse Reports</h1>
+        <div className="space-y-4">
+            <div className="flex items-center justify-between">
+                <h1 className="text-2xl font-bold text-white">Abuse Reports</h1>
+                {totalCount > 0 && (
+                    <span className="text-sm text-gray-400">{totalCount} pending</span>
+                )}
+            </div>
 
-            <div className="bg-[#0A0E1A] border border-white/5 rounded-lg overflow-hidden">
+            {/* Scrollable table container — used as IntersectionObserver root */}
+            <div
+                ref={scrollContainerRef}
+                className="bg-[#0A0E1A] border border-white/5 rounded-lg overflow-y-auto"
+                style={{ maxHeight: 'calc(100vh - 180px)' }}
+            >
                 <table className="w-full text-left text-sm text-gray-400">
-                    <thead className="bg-white/5 text-gray-200">
+                    <thead className="bg-white/5 text-gray-200 sticky top-0 z-10">
                         <tr>
                             <th className="p-4">Reported Image</th>
                             <th className="p-4">Reason</th>
@@ -147,23 +137,19 @@ export default function AdminReportsPage() {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
-                        {loading ? (
-                            <tr><td colSpan={5} className="p-8 text-center">Loading...</td></tr>
-                        ) : reports.length === 0 ? (
+                        {reports.length === 0 && !loading ? (
                             <tr><td colSpan={5} className="p-8 text-center">No pending reports</td></tr>
                         ) : (
                             reports.map((report) => (
                                 <tr key={report._id} className="hover:bg-white/5 transition-colors">
                                     <td className="p-4">
-                                        <div className="flex items-center gap-2">
-                                            {report.imageId ? (
-                                                <a href={`/view/${report.imageId._id}`} target="_blank" className="text-blue-400 hover:underline flex items-center gap-1">
-                                                    View Image <ExternalLink className="h-3 w-3" />
-                                                </a>
-                                            ) : (
-                                                <span className="text-red-500">Image Deleted</span>
-                                            )}
-                                        </div>
+                                        {report.imageId ? (
+                                            <a href={`/view/${report.imageId._id}`} target="_blank" className="text-blue-400 hover:underline flex items-center gap-1">
+                                                View Image <ExternalLink className="h-3 w-3" />
+                                            </a>
+                                        ) : (
+                                            <span className="text-red-500">Image Deleted</span>
+                                        )}
                                     </td>
                                     <td className="p-4">
                                         <div className="font-medium text-white">{report.reason}</div>
@@ -177,11 +163,9 @@ export default function AdminReportsPage() {
                                     </td>
                                     <td className="p-4 text-right">
                                         <div className="flex justify-end gap-2">
-
                                             <button
                                                 onClick={() => setResolveModal({ open: true, reportId: report._id })}
                                                 className="flex items-center gap-1 px-3 py-1 bg-red-500/10 text-red-400 border border-red-500/20 rounded hover:bg-red-500/20 transition-colors"
-                                                title="Resolve Report"
                                             >
                                                 <Check className="h-4 w-4" /> Resolve
                                             </button>
@@ -196,47 +180,21 @@ export default function AdminReportsPage() {
                                 </tr>
                             ))
                         )}
+
+                        {/* Sentinel row */}
+                        {page < totalPages && (
+                            <tr ref={sentinelRef}>
+                                <td colSpan={5} className="p-4 text-center text-gray-500 text-xs">
+                                    {loading ? 'Loading more...' : ''}
+                                </td>
+                            </tr>
+                        )}
                     </tbody>
                 </table>
             </div>
 
-            <div className="flex flex-col gap-2">
-                <div className="flex justify-between items-center text-sm text-gray-400">
-                    <div className="flex items-center gap-4">
-                        <button
-                            disabled={page === 1}
-                            onClick={() => setPage(p => Math.max(1, p - 1))}
-                            className="disabled:opacity-50 hover:text-white"
-                        >
-                            Previous
-                        </button>
-
-                        <span>Page {page} of {totalPages}</span>
-
-                        <button
-                            disabled={page >= totalPages}
-                            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                            className="disabled:opacity-50 hover:text-white"
-                        >
-                            Next
-                        </button>
-                    </div>
-
-                    <div className="flex items-center gap-4">
-                        <span className="text-xs text-gray-500">Showing 10 per page{totalCount ? ` • ${totalCount} total` : ''}</span>
-                        <button
-                            onClick={loadMore}
-                            disabled={loadedPages >= totalPages || loading}
-                            className="px-3 py-1 bg-white/5 rounded hover:bg-white/10 disabled:opacity-50"
-                        >
-                            Load more
-                        </button>
-                        <span className="text-xs text-gray-500">Loaded pages: {loadedPages}</span>
-                    </div>
-                </div>
-
-                {/* Sentinel element for infinite scroll (auto load more) */}
-                <div ref={sentinelRef} className="h-6 w-full" />
+            <div className="text-xs text-gray-500 text-right">
+                Showing {reports.length} of {totalCount} &nbsp;·&nbsp; Page {page} of {totalPages}
             </div>
 
             {/* Resolve Modal */}
@@ -268,7 +226,7 @@ export default function AdminReportsPage() {
                             >
                                 <div>
                                     <div className="text-yellow-200 font-medium">Delete & Warn User</div>
-                                    <div className="text-yellow-400/60 text-xs text-wrap">Add 1 warning (Auto-ban at 3)</div>
+                                    <div className="text-yellow-400/60 text-xs">Add 1 warning (Auto-ban at 3)</div>
                                 </div>
                                 <AlertTriangle className="h-5 w-5 text-yellow-500/50 group-hover:text-yellow-500" />
                             </button>

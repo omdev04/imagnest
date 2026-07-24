@@ -2,7 +2,6 @@
 
 import { signIn } from 'next-auth/react';
 import { Button } from '@/components/ui/Button';
-import { TelegramLoginButton } from './TelegramLoginButton';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
@@ -16,20 +15,9 @@ export const LoginView = () => {
     const searchParams = useSearchParams();
     const error = searchParams.get('error');
 
-    // You can set this in env NEXT_PUBLIC_TELEGRAM_BOT_NAME
-    const botName = process.env.NEXT_PUBLIC_TELEGRAM_BOT_NAME || 'samplebot';
-
     const handleGoogleLogin = async () => {
         setIsLoading(true);
         await signIn('google', { callbackUrl: '/dashboard' });
-    };
-
-    const handleTelegramAuth = async (user: any) => {
-        setIsLoading(true);
-        await signIn('telegram-login', {
-            ...user,
-            callbackUrl: '/dashboard',
-        });
     };
 
     return (
@@ -71,19 +59,6 @@ export const LoginView = () => {
                     Continue with Google
                 </Button>
 
-                <div className="relative py-2">
-                    <div className="absolute inset-0 flex items-center">
-                        <span className="w-full border-t border-white/5" />
-                    </div>
-                    <div className="relative flex justify-center text-[11px] uppercase tracking-widest font-bold">
-                        <span className="bg-[#050714] px-4 text-gray-600">Or</span>
-                    </div>
-                </div>
-
-                {/* Telegram Widget */}
-                <div className="flex flex-col items-center justify-center bg-[#29a9ea]/10 border border-[#29a9ea]/20 rounded-2xl p-4 transition-all hover:bg-[#29a9ea]/15">
-                    <TelegramLoginButton botName={botName} onAuth={handleTelegramAuth} />
-                </div>
             </div>
 
             <p className="mt-8 text-center text-xs text-gray-500">

@@ -3,7 +3,7 @@
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Shield, Users, Image, AlertTriangle, Activity, Database, Settings, FileText, BarChart3, Radio, Bug } from 'lucide-react';
+import { Shield, Users, Image, AlertTriangle, Activity, Settings, FileText, BarChart3, Radio, Bug } from 'lucide-react';
 import Link from 'next/link';
 
 const navItems = [
@@ -19,11 +19,10 @@ const navItems = [
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-    const { data: session, status } = useSession();
+    const { status } = useSession();
     const router = useRouter();
     const [isAdmin, setIsAdmin] = useState(false);
     const [loading, setLoading] = useState(true);
-    const [errorMsg, setErrorMsg] = useState('');
 
     useEffect(() => {
         if (status === 'unauthenticated') {
@@ -39,7 +38,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                         const json = await res.json().catch(() => ({}));
                         const msg = json.error || res.statusText;
                         console.error('Admin verification failed:', res.status, msg);
-                        setErrorMsg(`${res.status}: ${msg}`);
                         setIsAdmin(false);
                         return null;
                     }
@@ -51,19 +49,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     } else {
                         if (data) {
                             console.error('User is not admin');
-                            setErrorMsg('Verification passed but isAdmin is false');
                             setIsAdmin(false);
                         }
                     }
                 })
                 .catch(err => {
                     console.error('Admin verify error:', err);
-                    setErrorMsg(err.message);
                     setIsAdmin(false);
                 })
                 .finally(() => setLoading(false));
         }
-    }, [session, status, router]);
+    }, [status, router]);
 
     if (loading || status === 'loading') {
         return (
@@ -78,25 +74,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
     if (!isAdmin) {
         return (
-            <div className="h-screen w-screen bg-gradient-to-br from-[#000108] via-[#000439] to-[#000108] flex flex-col items-center justify-center text-white space-y-4">
-                <Shield className="h-16 w-16 text-[#0110FC] mb-4" style={{ filter: 'drop-shadow(0 0 20px rgba(1, 16, 252, 0.6))' }} />
-                <h1 className="text-3xl font-bold">Access Denied</h1>
-                <p className="text-[#8B9EFF]">You do not have permission to access the admin panel.</p>
-                {errorMsg && (
-                    <div className="p-3 bg-red-900/20 border border-red-500/50 rounded text-red-200 font-mono text-xs">
-                        Error: {errorMsg}
-                    </div>
-                )}
-                <div className="bg-[#000439] border border-[#0110FC]/20 p-3 rounded text-sm text-[#8B9EFF] font-mono">
-                    Current User: {session?.user?.email || 'Unknown'} (Role: {session?.user?.role || 'user'})
-                </div>
-                <div className="flex gap-4 mt-6">
-                    <Link href="/dashboard" className="px-4 py-2 bg-gradient-to-r from-[#0110FC] to-[#010FCC] rounded-md hover:shadow-[0_0_30px_rgba(1,16,252,0.4)] transition-all">
-                        Return to Dashboard
+            <div className="h-screen w-screen bg-[#000108] flex flex-col items-center justify-center text-white gap-3">
+                <Shield className="h-14 w-14 text-[#0110FC]" style={{ filter: 'drop-shadow(0 0 16px rgba(1, 16, 252, 0.6))' }} />
+                <h1 className="text-2xl font-bold">Access Denied</h1>
+                <p className="text-[#8B9EFF] text-sm">You don&apos;t have permission to access this area.</p>
+                <div className="flex gap-3 mt-4">
+                    <Link href="/dashboard" className="px-4 py-2 text-sm bg-[#0110FC] rounded-md hover:bg-[#010FCC] transition-colors">
+                        Go to Dashboard
                     </Link>
                     <button
                         onClick={() => signOut({ callbackUrl: '/login' })}
-                        className="px-4 py-2 bg-red-600/20 text-red-500 border border-red-500/50 rounded-md hover:bg-red-600/30 transition-colors"
+                        className="px-4 py-2 text-sm text-red-400 border border-red-500/40 rounded-md hover:bg-red-500/10 transition-colors"
                     >
                         Sign Out
                     </button>
