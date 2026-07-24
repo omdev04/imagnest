@@ -1,7 +1,9 @@
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 
-const CACHE_DIR = path.join(process.cwd(), 'cache');
+// Use OS temp directory to avoid Read-Only File System errors on Vercel
+const CACHE_DIR = path.join(os.tmpdir(), 'telephoto_cache');
 const ORIGINALS_DIR = path.join(CACHE_DIR, 'originals');
 const RESIZED_DIR = path.join(CACHE_DIR, 'resized');
 
