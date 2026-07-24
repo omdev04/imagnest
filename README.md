@@ -1,77 +1,101 @@
-# Telephoto
+![Imagnest Preview](./Screenshot/Screenshot1.png)
 
-Telephoto is a Next.js 16 App Router application that stores metadata in MongoDB and media in Telegram, with a custom CDN route for image delivery.
+# 📸 Imagnest — Unlimited Cloud Image Hosting & CDN
 
-## Local Development
+**Imagnest** is a high-performance, open-source image hosting platform and CDN. It uses Next.js 16, MongoDB, and Telegram's infrastructure to provide free, scalable, and secure cloud media storage.
 
-Install dependencies and start the app:
+---
+
+## 🌟 Features
+
+- ⚡ **Custom CDN & On-The-Fly Resizing**  
+  Serve images instantly with automatic thumbnail generation (`small`, `medium`, `original`) and smart caching.
+
+- 🔐 **Authentication & Privacy Controls**  
+  - Login easily with **Google OAuth** or **Telegram Login** via NextAuth.
+  - Set images as **Public** or **Private** with secure access token URLs.
+
+- 📊 **User Dashboard**  
+  - Upload & manage image libraries with clean visual previews.
+  - Track view counts, bandwidth usage, and active plan quotas.
+  - Manage API keys for integration into external apps.
+
+- 🛡️ **Admin Panel**  
+  - Moderate uploaded content (approve, flag, or delete images).
+  - Manage user roles (User, Admin, Superadmin).
+  - System logs and platform analytics.
+
+- 🎨 **Modern Glassmorphic Interface**  
+  Designed with Tailwind CSS, Framer Motion animations, and responsive dark mode UI.
+
+---
+
+## 🛠️ Tech Stack
+
+- **Framework:** Next.js 16 (App Router)
+- **Frontend:** React 19, Tailwind CSS v4, Framer Motion, Lucide Icons
+- **Database:** MongoDB with Mongoose ORM
+- **Storage Engine:** Telegram Bot API
+- **Auth:** NextAuth.js (Google & Telegram credentials)
+- **Deployment:** Vercel
+
+---
+
+## 🚀 Quick Start
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/omdev04/imagnest.git
+cd imagnest
+```
+
+### 2. Install dependencies
 
 ```bash
 npm install
+```
+
+### 3. Environment Setup
+
+Create a `.env` file in the root directory and configure the following variables:
+
+```env
+# Server Configuration
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=your_nextauth_secret_here
+
+# Database
+MONGODB_URI=your_mongodb_connection_string
+
+# Google OAuth
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+
+# Telegram Storage Bot
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+TELEGRAM_CHANNEL_ID=your_telegram_channel_id
+```
+
+### 4. Run Locally
+
+```bash
 npm run dev
 ```
 
-The site will be available at `http://localhost:3000`.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-## Cloudflare Workers Deployment
+---
 
-This repository is configured to deploy through OpenNext on Cloudflare Workers.
+## 🌐 Deploy to Vercel
 
-### 1. Install dependencies
+1. Push your repository to GitHub.
+2. Import the project in [Vercel](https://vercel.com).
+3. Add your environment variables (`MONGODB_URI`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL_ID`).
+4. Click **Deploy**.
 
-```bash
-npm install
-```
+---
 
-### 2. Authenticate Wrangler
+## 📄 License
 
-```bash
-npx wrangler login
-```
-
-### 3. Configure environment variables
-
-Set the same secrets you currently use locally in the Cloudflare Worker settings or via Wrangler secrets, especially:
-
-- `MONGODB_URI`
-- `NEXTAUTH_SECRET`
-- `GOOGLE_CLIENT_ID`
-- `GOOGLE_CLIENT_SECRET`
-- `TELEGRAM_BOT_TOKEN`
-- `TELEGRAM_CHANNEL_ID`
-- `TELEGRAM_BOT_TOKEN_1`
-- `TELEGRAM_CHANNEL_ID_1`
-- `TELEGRAM_BOT_TOKEN_2`
-- `TELEGRAM_CHANNEL_ID_2`
-
-Example:
-
-```bash
-npx wrangler secret put MONGODB_URI
-npx wrangler secret put NEXTAUTH_SECRET
-```
-
-### 4. Build for Workers
-
-```bash
-npm run build:worker
-```
-
-### 5. Preview locally on the Cloudflare runtime
-
-```bash
-npm run preview:worker
-```
-
-### 6. Deploy
-
-```bash
-npm run deploy:worker
-```
-
-## Runtime Notes
-
-- The image CDN path no longer depends on local disk caching when running on Cloudflare. It uses the Workers cache instead.
-- Image resizing now relies on Cloudflare image transformations in production. Local development falls back to serving the original Telegram asset.
-- Telegram uploads and bot operations now use direct Bot API `fetch` calls instead of `node-telegram-bot-api`, which makes the Worker runtime compatible.
-- MongoDB access still uses Mongoose. You should use a MongoDB deployment reachable from Cloudflare Workers, such as MongoDB Atlas or another public endpoint with network access.# telegramcdn
+Distributed under the MIT License. See `LICENSE` for more information.
