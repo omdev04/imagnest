@@ -110,23 +110,60 @@ export const UploadZone = () => {
                 return updated;
             });
 
-            const formData = new FormData();
-            formData.append('file', fileProgress.file);
-            formData.append('privacy', 'public');
-
             try {
-                const res = await axios.post('/api/upload', formData, {
-                    onUploadProgress: (p) => {
-                        const progress = p.total ? Math.round((p.loaded * 100) / p.total) : 0;
-                        setFiles(prev => {
-                            const updated = [...prev];
-                            updated[i] = { ...updated[i], progress };
-                            return updated;
+                const CHUNK_SIZE = 2.5 * 1024 * 1024; // 2.5MB per chunk to stay below Vercel's 4.5MB Serverless limit
+                let res;
+
+                if (fileProgress.file.size > CHUNK_SIZE) {
+                    const totalChunks = Math.ceil(fileProgress.file.size / CHUNK_SIZE);
+                    const uploadId = Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+
+                    for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+                        const start = chunkIndex * CHUNK_SIZE;
+                        const end = Math.min(start + CHUNK_SIZE, fileProgress.file.size);
+                        const chunkBlob = fileProgress.file.slice(start, end, fileProgress.file.type);
+                        const chunkFile = new File([chunkBlob], fileProgress.file.name, { type: fileProgress.file.type });
+
+                        const formData = new FormData();
+                        formData.append('file', chunkFile);
+                        formData.append('privacy', 'public');
+                        formData.append('uploadId', uploadId);
+                        formData.append('chunkIndex', chunkIndex.toString());
+                        formData.append('totalChunks', totalChunks.toString());
+                        formData.append('totalSize', fileProgress.file.size.toString());
+
+                        res = await axios.post('/api/upload', formData, {
+                            onUploadProgress: (p) => {
+                                if (p.total) {
+                                    const chunkProgress = (p.loaded / p.total);
+                                    const overallProgress = Math.round(((chunkIndex + chunkProgress) / totalChunks) * 100);
+                                    setFiles(prev => {
+                                        const updated = [...prev];
+                                        updated[i] = { ...updated[i], progress: Math.min(99, overallProgress) };
+                                        return updated;
+                                    });
+                                }
+                            }
                         });
                     }
-                });
+                } else {
+                    const formData = new FormData();
+                    formData.append('file', fileProgress.file);
+                    formData.append('privacy', 'public');
 
-                if (res.data.success) {
+                    res = await axios.post('/api/upload', formData, {
+                        onUploadProgress: (p) => {
+                            const progress = p.total ? Math.round((p.loaded * 100) / p.total) : 0;
+                            setFiles(prev => {
+                                const updated = [...prev];
+                                updated[i] = { ...updated[i], progress };
+                                return updated;
+                            });
+                        }
+                    });
+                }
+
+                if (res && res.data && res.data.success && res.data.image) {
                     const url = window.location.origin + res.data.image.url;
                     results.push({
                         url,
