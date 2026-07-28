@@ -6,7 +6,6 @@ import { Upload, X, Copy, Check, File as FileIcon, Image as ImageIcon } from 'lu
 import { cn } from '@/lib/utils';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
-import Image from 'next/image';
 
 interface FileWithPreview extends File {
     preview?: string;
@@ -27,7 +26,6 @@ export const UploadZone = () => {
     const [files, setFiles] = useState<UploadProgress[]>([]);
     const [uploading, setUploading] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
-    const [uploadedResults, setUploadedResults] = useState<{ url: string; name: string }[]>([]);
 
     const handleDrag = useCallback((e: React.DragEvent) => {
         e.preventDefault();
@@ -82,7 +80,6 @@ export const UploadZone = () => {
         }));
 
         setFiles(fileProgress);
-        setUploadedResults([]);
     };
 
     const removeFile = (index: number) => {
@@ -162,7 +159,6 @@ export const UploadZone = () => {
         }
 
         setUploading(false);
-        setUploadedResults(results);
     };
 
     const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
@@ -177,14 +173,14 @@ export const UploadZone = () => {
             if (f.preview) URL.revokeObjectURL(f.preview);
         });
         setFiles([]);
-        setUploadedResults([]);
     };
 
-    const allCompleted = files.length > 0 && files.every(f => f.status === 'completed');
+    const completedFiles = files.filter(f => f.status === 'completed' && f.url);
+    const allCompleted = !uploading && files.length > 0 && files.every(f => f.status === 'completed');
 
     return (
         <div className="w-full max-w-4xl mx-auto">
-            <AnimatePresence mode="wait">
+            <AnimatePresence>
                 {files.length === 0 ? (
                     <motion.div
                         key="dropzone"
@@ -254,11 +250,9 @@ export const UploadZone = () => {
                                         {/* Preview */}
                                         <div className="h-16 w-16 rounded-lg overflow-hidden bg-black border border-[#242628] flex-shrink-0">
                                             {fileProgress.preview ? (
-                                                <Image
+                                                <img
                                                     src={fileProgress.preview}
                                                     alt={fileProgress.file.name}
-                                                    width={64}
-                                                    height={64}
                                                     className="w-full h-full object-cover"
                                                 />
                                             ) : (
@@ -346,7 +340,7 @@ export const UploadZone = () => {
                             </div>
                             <h3 className="text-2xl font-bold text-white mb-2">Upload Successful!</h3>
                             <p className="text-[#72767a] mb-6">
-                                {uploadedResults.length} {uploadedResults.length === 1 ? 'image has' : 'images have'} been secured and cached.
+                                {completedFiles.length} {completedFiles.length === 1 ? 'image has' : 'images have'} been secured and cached.
                             </p>
                         </div>
 
